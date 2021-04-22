@@ -1,87 +1,187 @@
 import numpy as np
-import scipy.stats as sts
+import matplotlib.pyplot as plt
+from array import array
 import math
 
-def average(x, size):
-    num = 0.
-    for i in x:
-        num += i
-    num /= size
-    return num
+def read_signal(str):
+    data = []
+    with open(str, 'r') as inf:
+        for line in inf.readlines():
+            remove_dirst_str = line.replace("[", "")
+            remove_next_str = remove_dirst_str.replace("]", "")
+            data.append(remove_next_str.split(", "))
 
-def despertion(x, size):
-    y = average(x, size)
-    result = 0.
-    for i in x:
-        result += (i - y) * (i - y)
-    result /= size
-    return result
+    data_float_format = []
+    for item in data:
+        for x in item:
+            data_float_format.append(float(x))
+    return data_float_format
 
-def student(x_av, s, alpha, n):
-    result = np.zeros(2)
-    result[0] = x_av - (s * sts.t.ppf((1 - alpha / 2), (n - 1))) / math.sqrt(n - 1)
-    result[1] = x_av + (s * sts.t.ppf((1 - alpha / 2), (n - 1))) / math.sqrt(n - 1)
-    return result
-
-def chi_2(s, alpha, n):
-    result = np.zeros(2)
-    result[0] = (s * math.sqrt(n)) / math.sqrt(sts.chi2.ppf((1 - alpha / 2), (n - 1)))
-    result[1] = (s * math.sqrt(n)) / math.sqrt(sts.chi2.ppf((alpha / 2), (n - 1)))
-    return result
-
-def m4_val(x, size):
-    x_av = average(x, size)
-    result = 0.
+def get_array(data, num, size):
+    result = np.zeros(size)
     for i in range(size):
-        result += (x[i] - x_av) ** 4
-    result /= size
+        result[i] = data[(num - 1) * size + i]
     return result
 
-def e_val(x, size):
-    m4 = m4_val(x, size)
-    s4 = despertion(x, size) ** 2
-    result = (m4 / s4) - 3
+def get_y(num):
+    time_result = []
+    time_result.append([float(x) for x in range(1, num + 1)])
+    result = np.zeros(num)
+    for i in range(num):
+        result[i] = time_result[0][i]
     return result
 
-def U_val(x, size, alpha):
-    u_al = np.quantile(x, 1 - alpha / 2)
-    e = e_val(x, size)
-    result = u_al * math.sqrt((e + 2) / size)
+def del_blowout(data, size):
+    time_result = data
+    for j in range(1, 3):
+        for i in range(1, size - 1):
+            if time_result[i] > (time_result[i + 1] + time_result[i - 1]) / 2:
+                time_result[i] = (time_result[i + 1] + time_result[i - 1]) / 2
+                j = i - 1
+                while time_result[j] > (time_result[j + 1] + time_result[j - 1]) / 2:
+                    time_result[j] = (time_result[j + 1] + time_result[j - 1]) / 2
+                    j -= 1
+    return time_result
+
+def get_Areas(data, size):
+    num = int(math.log2(size))
+    hist = plt.hist(data, bins= num)
+    plt.show()
+    count = []
+    start = []
+    finish = []
+    types = [0] * num
+    for i in range(num):
+        count.append(hist[0][i])
+        start.append(hist[1][i])
+        finish.append(hist[1][i + 1])
+    sortCount = sorted(count)
+    k = 0
+    for i in range(num):
+        for j in range(num):
+            if int(sortCount[num - i - 1]) == int(count[j]):
+                if k == 0:
+                    types[j] = "Фон"
+                elif k == 1:
+                    types[j] = "Сигнал"
+                else:
+                    types[j] = "Переход"
+                k += 1
+    data = start, finish, types, count
+    return data
+
+def inta_group(data, size, k):
+    result = 0
+    num = int(size / k)
+    for i in range(k):
+        d = data[num * i: num * (i + 1)]
+        n = np.mean(d)
+        time_result = 0
+        for i in range(num):
+            time_result += (d[i] - n) ** 2
+        time_result /= (k - 1)
+        result += time_result
+    result /= k
     return result
 
-def asym_sigma(x, size, alpha):
-    U = U_val(x, size, alpha)
-    s = math.sqrt(despertion(x, size))
-    result = np.zeros(2)
-    result[0] += s * (1 - 0.5 * U)
-    result[1] += s * (1 + 0.5 * U)
+def inter_group(data, size, k):
+    result = 0
+    num = int(size / k)
+    av = np.mean(data)
+    for i in range(k):
+        d = data[num * i: num * (i + 1)]
+        n = np.mean(d)
+        result += (n - av) ** 2
+    result /= (k - 1)
+    result *= k
     return result
 
-def asym_mu(x, size, alpha):
-    u_al = np.quantile(x, 1 - alpha / 2)
-    x_av = average(x, size)
-    s = math.sqrt(despertion(x, size))
-    result = np.zeros(2)
-    result[0] = x_av - (s * u_al) / math.sqrt(size)
-    result[1] = x_av + (s * u_al) / math.sqrt(size)
-    return result
 
-arr = [20, 100]
-alpha = 0.05
+def get_F(data, size, k):
+    print("k =", k)
+    inta = inta_group(data, size, k)
+    print("inta group =", inta)
+    inter = inter_group(data, size, k)
+    print("inter group =", inter)
+    print("inter / inta", inter / inta)
 
-for i in arr:
-    x = np.random.normal(0, 1, i)
-    x_av = average(x, i)
-    s = math.sqrt(despertion(x, i))
-    stud = student(x_av, s, alpha, i)
-    chi = chi_2(s, alpha, i)
-    print("Num points =", i)
-    print(stud[0], "< mu <", stud[1])
-    print(chi[0], "< sigma <", chi[1])
-    print()
-    print("Asymptotic:")
-    mu = asym_mu(x, i, alpha)
-    sigma = asym_sigma(x, i, alpha)
-    print(mu[0], "< mu <", mu[1])
-    print(sigma[0], "< sigma <", sigma[1])
-    print()
+
+def get_k(size):
+    k = 4
+    while size % k != 0:
+        k += 1
+        if size == k:
+            size += 1
+            k = 4
+    return k
+
+def print_fisher(area_data, size, data):
+    new_data = array("f", data)
+    for i in range(size - 1):
+        d = np.zeros(area_data[i + 1] - area_data[i])
+        for j in range(area_data[i + 1] - area_data[i]):
+            d[j] = new_data[area_data[i] + j]
+        #d = data[area_data[i]: area_data[i + 1]]
+        k = get_k(len(d))
+        get_F(d, area_data[i + 1] - area_data[i], k)
+
+def disturb(x, num, data, size):
+    y = get_y(num)
+    area_data = []
+    label = []
+    area_data.append(0)
+    start = 0
+    i = 0
+    n = 0
+    while i < num:
+        for j in range(size):
+            count = 0
+            while i < num and x[i] <= data[1][j] and x[i] >= data[0][j]:
+                count += 1
+                i += 1
+            if count > 0:
+                label.append(data[2][j])
+                n += 1
+                area_data.append(int(start + count))
+                start += count
+
+    area_data = area_data, label
+    new_data = []
+    new_data.append(0)
+
+    i = 0
+    while i < n:
+        if area_data[1][i] == "Фон":
+            color_ = 'y'
+        if area_data[1][i] == "Сигнал":
+            color_ = 'r'
+        if area_data[1][i] == "Переход":
+            color_ = 'g'
+        j = i + 1
+        while j < n and area_data[1][j] == area_data[1][i]:
+            j += 1
+        plt.plot(y[int(area_data[0][i]):int(area_data[0][j])],
+                 x[int(area_data[0][i]):int(area_data[0][j])], color=color_, label=area_data[1][i])
+        new_data.append(area_data[0][j])
+        i = j
+    new_data = array("i", new_data)
+    print_fisher(new_data, len(new_data), x)
+    plt.legend()
+    plt.show()
+
+fileData = read_signal("wave_ampl.txt")
+idSignal = 80
+indArray = get_array(fileData, idSignal, 1024)
+y = get_y(1024)
+
+plt.plot(y, indArray)
+plt.show()
+
+plt.hist(indArray, bins=10, range=(min(indArray), max(indArray)), density=True)
+plt.show()
+
+newArray = del_blowout(indArray, 1024)
+data = get_Areas(newArray, 1024)
+plt.plot(y, newArray)
+plt.show()
+disturb(newArray, 1024, data, 10)
